@@ -399,6 +399,129 @@ class ApiController extends CommonController
 		$job->save();
 	}
 
+	 public function actionBlocks()
+    {
+        $id = (int) getiparam('id');
+
+        $memcache = controller()->memcache->memcache;
+
+        $json = memcache_get($memcache, "api_blocks_id_".$id);
+
+        if(empty($json))
+        {
+            if(!empty($id))
+                $db_blocks = getdbolist('db_blocks', "coin_id=:id and category<>'orphan'  order by time desc limit 250", array(':id'=>$id));
+            else
+                $db_blocks = getdbolist('db_blocks', "category<>'orphan' order by time desc limit 500");
+
+            $data=[];
+
+            if($db_blocks&&is_array($db_blocks))
+            {
+                $ids=[];
+                foreach ($db_blocks as $block)
+                {
+                    if(!in_array($block->coin_id, $ids))
+                        $ids[]=$block->coin_id;
+                }
+
+                $coins = getdbolist('db_coins', 'id in ('.implode(',', $ids).')');
+
+
+                if($coins&&is_array($coins))
+                {
+                    $coins_arr=[];
+                    foreach ($coins as $coin)
+                    {
+                        $coins_arr[$coin->id]=$coin->symbol;
+                    }
+
+                    foreach ($db_blocks as $block)
+                    {
+                        $data[]=[
+                            'coin'=>$coins_arr[$block->coin_id],
+                            'time'=>$block->time,
+                            'height'=>$block->height,
+                            'amount'=>$block->amount,
+                            'category'=>$block->category,
+                            'difficulty'=>$block->difficulty,
+                            'difficulty_user'=>$block->difficulty_user,
+
+                        ];
+                    }
+
+                }
+
+            }
+
+            $json = json_encode($data);
+            memcache_set($memcache, "api_blocks_id_".$id, $json, MEMCACHE_COMPRESSED, 15);
+        }
+        echo  $json;
+    }
+
+
+    public function actionMiners()
+    {
+        $algo = getparam('algo');
+
+        $memcache = controller()->memcache->memcache;
+
+        $json = memcache_get($memcache, "api_miners_id_".$algo);
+
+        if(empty($json))
+        {
+            if(!empty($algo))
+                $data = dbolist("select algo, version, count(*) as `count` from workers where algo=:algo group by version order by `count` desc", array(':algo'=>$algo));
+            else
+                $data = dbolist("select algo, version, count(*) as `count` from workers group by algo, version order by `count` desc");
+
+            $json = json_encode($data);
+            memcache_set($memcache, "api_miners_id_".$algo, $json, MEMCACHE_COMPRESSED, 15);
+
+        }
+
+        echo  $json;
+    }
+
+    public function actionBench()
+    {
+        $memcache = controller()->memcache->memcache;
+
+        $json = memcache_get($memcache, "api_bench");
+
+        if(empty($json))
+        {
+            $data = dbolist("select
+                                            `algo` 
+                                            ,`time`
+                                            ,`chip`
+                                            ,`device`
+                                            ,`vendorid`
+                                            ,`arch`
+                                            ,`khps` AS hashrate 
+                                            ,`intensity`
+                                            ,`driver`
+                                            ,`os`
+                                            ,`client`
+                                            ,`freq`
+                                            ,`realfreq`
+                                            ,`memf` as memfreq
+                                            ,`power`
+                                           
+                                            
+                                      from benchmarks order by `time` desc limit 250");
+
+            $json = json_encode($data);
+            memcache_set($memcache, "api_bench", $json, MEMCACHE_COMPRESSED, 15);
+
+        }
+
+        echo  $json;
+    }
+
+
+	
 // 	public function actionNodeReport()
 // 	{
 // 		$name = getparam('name');
