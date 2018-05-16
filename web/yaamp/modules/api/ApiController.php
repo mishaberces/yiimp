@@ -399,6 +399,80 @@ class ApiController extends CommonController
 		$job->save();
 	}
 
+	public function actionBlocks()
+    	{
+        $id = (int) getiparam('id');
+        $memcache = controller()->memcache->memcache;
+        $json = memcache_get($memcache, "api_blocks_id_".$id);
+        if(empty($json))
+       	 {
+            if(!empty($id))
+                $blocks = dbolist("SELECT coins.symbol,blocks.time,blocks.height,blocks.amount,blocks.category,blocks.difficulty,blocks.difficulty_user,blocks.algo FROM blocks LEFT JOIN coins ON(blocks.coin_id = coins.id) WHERE coin_id=:id AND category!='orphan' ORDER BY time DESC LIMIT 0,250", array(':id'=>$id));
+            else
+                $blocks = dbolist("SELECT coins.symbol,blocks.time,blocks.height,blocks.amount,blocks.category,blocks.difficulty,blocks.difficulty_user,blocks.algo FROM blocks LEFT JOIN coins ON(blocks.coin_id = coins.id) WHERE category!='orphan' ORDER BY time DESC LIMIT 0,500");
+
+            if($blocks && is_array($blocks))
+            {
+                $json = json_encode($blocks);
+                memcache_set($memcache, "api_blocks_id_".$id, $json, MEMCACHE_COMPRESSED, 60);
+            }
+       	 }
+        echo  $json;
+   	}
+
+
+    public function actionMiners()
+    {
+        $algo = getparam('algo');
+        $memcache = controller()->memcache->memcache;
+        $json = memcache_get($memcache, "api_miners_id_".$algo);
+
+        if(empty($json))
+        {
+            if(!empty($algo))
+                $data = dbolist("select algo, version, count(*) as `count` from workers where algo=:algo group by version order by `count` desc", array(':algo'=>$algo));
+            else
+                $data = dbolist("select algo, version, count(*) as `count` from workers group by algo, version order by `count` desc");
+
+            $json = json_encode($data);
+            memcache_set($memcache, "api_miners_id_".$algo, $json, MEMCACHE_COMPRESSED, 60);
+        }
+        echo  $json;
+    }
+
+    public function actionBench()
+    {
+        $memcache = controller()->memcache->memcache;
+        $json = memcache_get($memcache, "api_bench");
+
+        if(empty($json))
+        {
+            $data = dbolist("select
+                                            `algo` 
+                                            ,`time`
+                                            ,`chip`
+                                            ,`device`
+                                            ,`vendorid`
+                                            ,`arch`
+                                            ,`khps` AS hashrate 
+                                            ,`intensity`
+                                            ,`driver`
+                                            ,`os`
+                                            ,`client`
+                                            ,`freq`
+                                            ,`realfreq`
+                                            ,`memf` as memfreq
+                                            ,`power`
+                                      from benchmarks order by `time` desc limit 250");
+
+            $json = json_encode($data);
+            memcache_set($memcache, "api_bench", $json, MEMCACHE_COMPRESSED, 60);
+        }
+        echo  $json;
+    }
+
+	
+	
 // 	public function actionNodeReport()
 // 	{
 // 		$name = getparam('name');
